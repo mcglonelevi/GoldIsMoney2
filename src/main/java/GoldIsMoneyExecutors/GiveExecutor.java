@@ -34,7 +34,7 @@ public class GiveExecutor implements CommandExecutor {
                     src.sendMessage(Text.of("Gold Transferred"));
                     args.<Player>getOne("receiver").get().sendMessage(Text.of("You have received gold!"));
                 } else {
-                    src.sendMessage(Text.of("Could not send money! Not enough funds!"));
+                    src.sendMessage(Text.of("Could not send gold! Not enough funds!"));
                 }
             }
         } else

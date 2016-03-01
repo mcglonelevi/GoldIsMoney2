@@ -7,9 +7,14 @@ import org.spongepowered.api.command.CommandSource;
 import org.spongepowered.api.command.args.CommandContext;
 import org.spongepowered.api.command.spec.CommandExecutor;
 import org.spongepowered.api.entity.living.player.Player;
+import org.spongepowered.api.event.cause.Cause;
 import org.spongepowered.api.plugin.Plugin;
+import org.spongepowered.api.service.economy.Currency;
 import org.spongepowered.api.service.economy.EconomyService;
+import org.spongepowered.api.service.economy.account.UniqueAccount;
 import org.spongepowered.api.text.Text;
+
+import java.util.Optional;
 
 public class ResetBalanceExecutor implements CommandExecutor{
 
@@ -24,8 +29,17 @@ public class ResetBalanceExecutor implements CommandExecutor{
 
         if(src instanceof Player) {
             Player player = (Player) src;
-            economyService.getAccount(player.getUniqueId()).get().resetBalance(new GoldCurrency(), null, null);
-            player.sendMessage(Text.of("Your balance has been reset."));
+
+            Optional<Player> playerOptional = args.<Player>getOne("player");
+            if (playerOptional.isPresent()) {
+                player = playerOptional.get();
+            }
+
+            UniqueAccount account = economyService.getAccount(player.getUniqueId()).get();
+            Currency currency = new GoldCurrency();
+            account.resetBalance(currency, Cause.of(player), null);
+            src.sendMessage(Text.of(player.getName() + "'s Balance reset."));
+            player.sendMessage(Text.of("Your balance has been reset to " + currency.getSymbol().toPlain() + account.getBalance(currency)));
         } else {
             src.sendMessage(Text.of("Must be a player"));
         }

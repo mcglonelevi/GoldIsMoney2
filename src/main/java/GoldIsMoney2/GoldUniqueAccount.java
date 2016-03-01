@@ -1,8 +1,8 @@
 package GoldIsMoney2;
 
-import com.google.common.collect.Iterators;
 import org.spongepowered.api.entity.living.player.Player;
 import org.spongepowered.api.event.cause.Cause;
+import org.spongepowered.api.item.ItemType;
 import org.spongepowered.api.item.ItemTypes;
 import org.spongepowered.api.item.inventory.Inventory;
 import org.spongepowered.api.item.inventory.ItemStack;
@@ -14,7 +14,6 @@ import org.spongepowered.api.service.economy.transaction.*;
 import org.spongepowered.api.text.Text;
 
 import java.math.BigDecimal;
-import java.util.Iterator;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -49,15 +48,58 @@ public class GoldUniqueAccount implements UniqueAccount{
 
     @Override
     public BigDecimal getBalance(Currency currency, Set<Context> set) {
+        int balance = 0;
+
+        Inventory goldBlockInventory = player.getInventory().query(ItemTypes.GOLD_BLOCK);
+        Inventory goldIngotInventory = player.getInventory().query(ItemTypes.GOLD_INGOT);
+        Inventory goldNuggetInventory = player.getInventory().query(ItemTypes.GOLD_NUGGET);
+
+        balance += getItemsInInventory(goldBlockInventory) * 81;
+        balance += getItemsInInventory(goldIngotInventory) * 9;
+        balance += getItemsInInventory(goldNuggetInventory);
+
+        return BigDecimal.valueOf(balance);
+    }
+
+    private int getItemsInInventory(Inventory inventory) {
         int numItems = 0;
-        Inventory inventory = player.getInventory().query(ItemTypes.GOLD_INGOT);
         //First Slot check
         numItems += inventory.totalItems();
         //Deal with rest
         for (Inventory item : inventory) {
             numItems += item.totalItems();
         }
-        return BigDecimal.valueOf(numItems);
+        return numItems;
+    }
+
+    private void clearItemsInInventory(Inventory inventory) {
+        //First Slot check
+        inventory.clear();
+        //Deal with rest
+        for (Inventory item : inventory) {
+            item.clear();
+        }
+    }
+
+    private void offerGold (ItemType itemType, int number) {
+        int fullStacks = number / 64;
+        int remainder = number % 64;
+
+        for (int i = 0; i < fullStacks; i++) {
+            player.getInventory().offer(ItemStack.of(itemType, 64));
+        }
+        if (remainder > 0)
+            player.getInventory().offer(ItemStack.of(itemType,remainder));
+    }
+
+    private int getStacks (int number) {
+        int stackCount = 0;
+        stackCount += number / 64;
+        number -= number * stackCount;
+        if (number != 0) {
+            stackCount++;
+        }
+        return stackCount;
     }
 
     @Override
@@ -67,26 +109,38 @@ public class GoldUniqueAccount implements UniqueAccount{
 
     @Override
     public TransactionResult setBalance(Currency currency, BigDecimal bigDecimal, Cause cause, Set<Context> set) {
-        //Get Play inventory
-        Inventory inventory = player.getInventory().query(ItemTypes.GOLD_INGOT);
-        //Clear first slot
-        inventory.clear();
-        //Clear Rest
-        for (Inventory item : inventory) {
-            item.clear();
+
+        if (bigDecimal.intValue() < 0) {
+            return new GoldTransactionResult(this, currency, bigDecimal, set, ResultType.FAILED, TransactionTypes.DEPOSIT);
         }
+
+        Inventory goldBlockInventory = player.getInventory().query(ItemTypes.GOLD_BLOCK);
+        Inventory goldIngotInventory = player.getInventory().query(ItemTypes.GOLD_INGOT);
+        Inventory goldNuggetInventory = player.getInventory().query(ItemTypes.GOLD_NUGGET);
 
         // Put # of items into inventory
         // Get number of gold bars as int
-        int goldBars = bigDecimal.intValue();
-        int fullStacks = goldBars / 64;
-        int remainder = goldBars % 64;
+        int remainder = bigDecimal.intValue();
+        int numberGoldBlocks = bigDecimal.intValue() / 81;
+        remainder -= numberGoldBlocks * 81;
+        int numberGoldIngots =  remainder / 9;
+        remainder -= numberGoldIngots * 9;
+        int numberGoldNuggets = remainder;
 
-        for (int i = 0; i < fullStacks; i++) {
-            player.getInventory().offer(ItemStack.of(ItemTypes.GOLD_INGOT, 64));
+        int numStacks = getStacks(numberGoldBlocks) + getStacks(numberGoldIngots) + getStacks(numberGoldNuggets);
+        int emptySlots = player.getInventory().capacity() - player.getInventory().size();
+
+        if (numStacks > emptySlots) {
+            return new GoldTransactionResult(new GoldUniqueAccount(player), currency, bigDecimal, set, ResultType.ACCOUNT_NO_SPACE, null);
         }
-        if (remainder > 0)
-            player.getInventory().offer(ItemStack.of(ItemTypes.GOLD_INGOT,remainder));
+
+        clearItemsInInventory(goldBlockInventory);
+        clearItemsInInventory(goldIngotInventory);
+        clearItemsInInventory(goldNuggetInventory);
+
+        offerGold(ItemTypes.GOLD_BLOCK, numberGoldBlocks);
+        offerGold(ItemTypes.GOLD_INGOT, numberGoldIngots);
+        offerGold(ItemTypes.GOLD_NUGGET, numberGoldNuggets);
 
         return new GoldTransactionResult(new GoldUniqueAccount(player), currency, bigDecimal, set, ResultType.SUCCESS, null);
     }
@@ -98,21 +152,27 @@ public class GoldUniqueAccount implements UniqueAccount{
 
     @Override
     public TransactionResult resetBalance(Currency currency, Cause cause, Set<Context> set) {
-        setBalance(new GoldCurrency(), BigDecimal.ZERO, null, null);
-        return null;
+        TransactionResult result = setBalance(currency, this.getDefaultBalance(currency), cause, set);
+        return result;
     }
 
     @Override
     public TransactionResult deposit(Currency currency, BigDecimal bigDecimal, Cause cause, Set<Context> set) {
-        setBalance(currency, BigDecimal.valueOf(getBalance(currency).intValue() + bigDecimal.intValue()), null);
-        return new GoldTransactionResult(this, currency, bigDecimal, set, ResultType.SUCCESS, TransactionTypes.DEPOSIT);
+        if (bigDecimal.intValue() < 0) {
+            return new GoldTransactionResult(this, currency, bigDecimal, set, ResultType.FAILED, TransactionTypes.DEPOSIT);
+        }
+        TransactionResult result = setBalance(currency, BigDecimal.valueOf(getBalance(currency).intValue() + bigDecimal.intValue()), null);
+        return new GoldTransactionResult(this, currency, bigDecimal, set, result.getResult(), TransactionTypes.DEPOSIT);
     }
 
     @Override
     public TransactionResult withdraw(Currency currency, BigDecimal bigDecimal, Cause cause, Set<Context> set) {
+        if (bigDecimal.intValue() < 0) {
+            return new GoldTransactionResult(this, currency, bigDecimal, set, ResultType.FAILED, TransactionTypes.DEPOSIT);
+        }
         if (getBalance(currency).intValue() >= bigDecimal.intValue()) {
-            setBalance(currency, BigDecimal.valueOf(getBalance(currency).intValue() - bigDecimal.intValue()), null);
-            return new GoldTransactionResult(this, currency, bigDecimal, set, ResultType.SUCCESS, TransactionTypes.WITHDRAW);
+            TransactionResult result = setBalance(currency, BigDecimal.valueOf(getBalance(currency).intValue() - bigDecimal.intValue()), null);
+            return new GoldTransactionResult(this, currency, bigDecimal, set, result.getResult(), TransactionTypes.WITHDRAW);
         } else {
             return new GoldTransactionResult(this, currency, bigDecimal, set, ResultType.ACCOUNT_NO_FUNDS, TransactionTypes.WITHDRAW);
         }
@@ -120,11 +180,26 @@ public class GoldUniqueAccount implements UniqueAccount{
 
     @Override
     public TransferResult transfer(Account account, Currency currency, BigDecimal bigDecimal, Cause cause, Set<Context> set) {
-        TransactionResult result = withdraw(currency, bigDecimal, null);
-        if (result.getResult().equals(ResultType.SUCCESS)) {
-            account.deposit(currency,bigDecimal,null);
+
+        ResultType resultType = ResultType.FAILED;
+
+        if (bigDecimal.intValue() < 0) {
+            return new GoldTransferResult(account, this, currency, bigDecimal, set, resultType, TransactionTypes.TRANSFER);
         }
-        return new GoldTransferResult(account, this, currency, bigDecimal, set, result.getResult(), TransactionTypes.TRANSFER);
+
+        if (getBalance(currency).intValue() >= bigDecimal.intValue()) {
+            TransactionResult result = withdraw(currency, bigDecimal, cause, set);
+            if (result.getResult().equals(ResultType.SUCCESS)) {
+                TransactionResult depResult = account.deposit(currency,bigDecimal,cause,set);
+                if (depResult.getResult().equals(ResultType.SUCCESS)) {
+                    resultType = ResultType.SUCCESS;
+                } else{
+                    deposit(currency, bigDecimal, cause, set);
+                }
+            }
+        }
+
+        return new GoldTransferResult(account, this, currency, bigDecimal, set, resultType, TransactionTypes.TRANSFER);
     }
 
     @Override
@@ -136,4 +211,5 @@ public class GoldUniqueAccount implements UniqueAccount{
     public Set<Context> getActiveContexts() {
         return null;
     }
+
 }

@@ -8,12 +8,12 @@ import java.math.BigDecimal;
 public class GoldCurrency implements Currency {
     @Override
     public Text getDisplayName() {
-        return Text.of("Gold Ingot");
+        return Text.of("Gold");
     }
 
     @Override
     public Text getPluralDisplayName() {
-        return Text.of("Gold Ingots");
+        return Text.of("Gold");
     }
 
     @Override

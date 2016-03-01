@@ -8,9 +8,12 @@ import org.spongepowered.api.command.args.CommandContext;
 import org.spongepowered.api.command.spec.CommandExecutor;
 import org.spongepowered.api.entity.living.player.Player;
 import org.spongepowered.api.service.economy.EconomyService;
+import org.spongepowered.api.service.economy.transaction.ResultType;
+import org.spongepowered.api.service.economy.transaction.TransactionResult;
 import org.spongepowered.api.text.Text;
 
 import java.math.BigDecimal;
+import java.util.Optional;
 
 public class SetBalanceExecutor implements CommandExecutor{
 
@@ -27,15 +30,27 @@ public class SetBalanceExecutor implements CommandExecutor{
 
             Player player = (Player) src;
             int numBars = args.<Integer>getOne("amount").get();
+            Optional<Player> playerOptional = args.<Player>getOne("player");
+
+            if (playerOptional.isPresent()) {
+                player = playerOptional.get();
+            }
 
             if (numBars < 0)
-                player.sendMessage(Text.of("Amount must be >= 0"));
-            else
-                economyService.getAccount(player.getUniqueId()).get().setBalance(new GoldCurrency(), BigDecimal.valueOf(numBars), null);
+                src.sendMessage(Text.of("Amount must be >= 0"));
+            else {
+                TransactionResult result = economyService.getAccount(player.getUniqueId()).get().setBalance(new GoldCurrency(), BigDecimal.valueOf(numBars), null);
+                if (!result.getResult().equals(ResultType.SUCCESS)) {
+                    src.sendMessage(Text.of("There was an issue transferring funds.  (Lack of inventory space.)"));
+                } else {
+                    src.sendMessage(Text.of("Funds set."));
+                    player.sendMessage(Text.of("Your new balance is " + economyService.getAccount(player.getUniqueId()).get().getBalance(new GoldCurrency())));
+                }
 
+            }
         }
         else
-            src.sendMessage(Text.of("Must be a player"));
+            src.sendMessage(Text.of("Must be a player to use this command."));
 
         return CommandResult.success();
     }

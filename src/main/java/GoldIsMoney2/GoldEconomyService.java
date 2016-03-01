@@ -81,7 +81,7 @@ public class GoldEconomyService implements EconomyService {
     }
 
     /*
-    Virtual accounts are not implemented at this time.
+    Virtual accounts are not implemented at this time.  They may or may not be added at a later time.
      */
     @Override
     public Optional<VirtualAccount> createVirtualAccount(String s) {
