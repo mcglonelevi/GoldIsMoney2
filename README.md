@@ -2,7 +2,11 @@
 
 ## Introduction
 
-This is a plugin for the Sponge Minecraft server.  It turns gold nuggets, gold ingots, and gold blocks into money!
+This is a plugin for the Sponge Minecraft server.  It turns gold nuggets, gold ingots, and gold blocks into money!  This is a rough port of Flobi's GoldIsMoney plugin for bukkit:
+
+http://dev.bukkit.org/bukkit-plugins/goldismoney/
+
+I will be adding more features to make the plugin compatable with Sponge's Economy API.
 
 The values are as follows:
 
